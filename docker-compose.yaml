@@ -1,0 +1,57 @@
+version: '3.3'
+
+services:
+  nginx:
+    image: nginx:stable-alpine
+    container_name: ${DOCKER_CONTAINER_PREFIX}_nginx
+    volumes:
+      - ./configs/nginx:/etc/nginx/conf.d/
+      - ./${DOCKER_BACKEND}:/var/www/backend
+      - ./${DOCKER_FRONTEND}:/var/www/frontend
+    command: [nginx-debug, '-g', 'daemon off;']
+    links:
+      - php_fpm_backend:php_fpm_backend
+    depends_on:
+      - php_fpm_backend
+    networks:
+      proxy_net:
+        ipv4_address: ${DOCKER_HOST_NGINX}
+
+  php_fpm_backend:
+    image: ${DOCKER_PREFIX}_php_fpm
+    container_name: ${DOCKER_CONTAINER_PREFIX}_php_fpm
+    build:
+      context: ./configs/php_fpm/
+      dockerfile: Dockerfile
+    volumes:
+      - ./${DOCKER_BACKEND}:/var/www/backend
+    links:
+      - pgsql:pgsql
+    depends_on:
+      - pgsql
+    environment:
+      - PHP_IDE_CONFIG=serverName=server
+    networks:
+      proxy_net:
+        ipv4_address: ${DOCKER_HOST_BACKEND}
+
+  pgsql:
+    image: postgres:14-alpine
+    container_name: ${DOCKER_CONTAINER_PREFIX}_pgsql
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_DB: ${DB_DATABASE}
+      PGDATA: /var/lib/postgresql/data
+    volumes:
+      - ./postgres/data:/var/lib/postgresql/data
+      - ./postgres:/postgres
+    networks:
+      proxy_net:
+        ipv4_address: ${DOCKER_HOST_PGSQL}
+
+networks:
+  proxy_net:
+    ipam:
+      config:
+        - subnet: ${DOCKER_SUBNET}
